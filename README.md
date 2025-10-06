@@ -57,7 +57,7 @@ eFPGA
 ├── README.md                       # Repository README (You are here)
 ├── yonga_archs                     # FPGA fabric architecture directory 
 │   ├── cell_library                # Custom primitives used in the FPGA
-│   │   ├── BUF.v
+│   │   ├── BUFF.v
 │   │   └── ...
 │   ├── Fabric                      # Generated fabric
 │   │   ├── fabric_hierarchy.txt
