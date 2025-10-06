@@ -1,8 +1,8 @@
 module  adder_pipe
 #(
-    parameter width = 4) (
+    parameter width = 1) (
     input clk,
-    input Reset,
+    input GLOBAL_RESET,
     input [width-1:0] a_i,
     input [width-1:0] b_i,
     input [width-1:0] c_i,
@@ -30,8 +30,8 @@ reg [width+1:0] sum1,sum2,sum3,sum4;
 reg [width+2:0] sum5, sum6;
 reg [width+3:0] sum7;
 
-always @(posedge clk, posedge Reset) begin
-    if (Reset) begin
+always @(posedge clk, posedge GLOBAL_RESET) begin
+    if (GLOBAL_RESET) begin
         a       <= 0;
         b       <= 0;
         c       <= 0;
