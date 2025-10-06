@@ -4,7 +4,7 @@
 # Author:       Ahmad Houraniah
 # Version:      0.1.0
 # Description:  This script is contains helper functions to get 
-#               the paths of the efpga-design-flow directory and
+#               the paths of the eFPGA directory and
 #----------------------------------------------------------------#
 
 import os

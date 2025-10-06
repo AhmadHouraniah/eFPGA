@@ -91,7 +91,7 @@ class TaskConf:
 
     def run_task(self):
         """Runs the task based on the testbench type."""
-        if self.tb_type > 1:
+        if self.tb_type == 0:
             self.generate_pin_map_csv()
         else:
             self._cleanup_old_sdc() 
@@ -127,7 +127,7 @@ class TaskConf:
     def _run_docker_task(self):
         """Runs the task in a Docker container."""
         UID = os.popen("id -u").read().strip()
-        command = f"docker run -it --rm --user {UID} -v {get_TRISTAN_EFPGA_PATH()[:-1]}:/home/openfpga_user/ ghcr.io/lnis-uofu/openfpga-master:latest /home/openfpga_user/docker_entrypoint.sh"
+        command = f"docker run -it --rm --user {UID} -v {get_TRISTAN_EFPGA_PATH()[:-1]}:/home/openfpga_user/ ghcr.io/lnis-uofu/openfpga-master:3b3acf31c /home/openfpga_user/docker_entrypoint.sh"
         return self._run_task(command)
 
     def _run_local_task(self):
@@ -139,8 +139,14 @@ class TaskConf:
         """Executes a task and checks for errors in the output."""
         stream = os.popen(command)
         output = stream.read()
+        
         if 'ERROR' in output:
-            print("Task execution failed with error.")
+            print("OpenFPGA task failed.")
+            # Print log path for debugging
+            if hasattr(self, 'benchmark') and self.benchmark:
+                log_path = f"latest/{self.arch_name}/{self.benchmark.get_name()}/MIN_ROUTE_CHAN_WIDTH/openfpgashell.log"
+                print(f"Log available at: {log_path}")
+
             return False
         print(output)
 
@@ -199,13 +205,13 @@ class TaskConf:
             file.write(f'RIGHT,,,,gfpga_pad_EMBEDDED_IO_SOC_OUT[{i}],pad_fpga_io[{i}],out,,\n')
 
         start = end
-        end += (width - 2) * self.pins_per_io[2]
+        end += width * self.pins_per_io[2]
         for i in range(start, end):
             file.write(f'BOTTOM,,,,gfpga_pad_EMBEDDED_IO_SOC_IN[{i}],pad_fpga_io[{i}],in,,\n')
             file.write(f'BOTTOM,,,,gfpga_pad_EMBEDDED_IO_SOC_OUT[{i}],pad_fpga_io[{i}],out,,\n')
 
         start = end
-        end += (height - 2) * self.pins_per_io[3]
+        end += (height) * self.pins_per_io[3]
         for i in range(start, end):
             file.write(f'LEFT,,,,gfpga_pad_EMBEDDED_IO_SOC_IN[{i}],pad_fpga_io[{i}],in,,\n')
             file.write(f'LEFT,,,,gfpga_pad_EMBEDDED_IO_SOC_OUT[{i}],pad_fpga_io[{i}],out,,\n')
