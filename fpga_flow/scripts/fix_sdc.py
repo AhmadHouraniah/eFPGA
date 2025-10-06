@@ -72,7 +72,7 @@ def get_submodules():
         (r"grid_io_side_r ", lambda *_: "grid_io_side_r"),
         (r"grid_io_side_l ", lambda *_: "grid_io_side_l"),
         (r"grid_io_side_b ", lambda *_: "grid_io_side_b"),
-        (r"grid_mult_18 ", lambda *_: "grid_mult_18"),
+        (r"grid_mult_16 ", lambda *_: "grid_mult_16"),
         (r"grid_memory ", lambda *_: "grid_memory"),
         (r"grid_clb ", lambda *_: "grid_clb"),
     ]
@@ -178,24 +178,29 @@ def _write_file_contents(output_file, file_path):
 def _write_clock_constraints(output_file, module_type, period):
     """Write clock constraints for a specific module type."""
     output_file.write("################################### Operation Clocks constraints ###################################\n")
-    output_file.write(f"create_clock -name {module_type}_left_width_0_height_0_subtile_0__pin_clk_0_ -period {period} \
-                        [get_ports {module_type}_left_width_0_height_0_subtile_0__pin_clk_0_]\n")
+    output_file.write(f"create_clock -name {module_type}_bottom_width_0_height_0_subtile_0__pin_clk_0_ -period {period} \
+                        [get_ports {module_type}_bottom_width_0_height_0_subtile_0__pin_clk_0_]\n")
     output_file.write("####################################################################################################\n")
 
 def _fix_sdc_paths(temp_path, final_path):
     """Fix incorrect paths in the temporary SDC file and write to the final SDC file."""
     path_replacements = [
+
+        (r"logical_tile_clb_mode_default__fle_mode_physical__fabric_mode_default__adder_2/"
+        r"logical_tile_clb_mode_default__fle_mode_physical__fabric_mode_default__adder",
+        "logical_tile_clb_mode_default__fle_mode_physical__fabric_mode_default__adder_0"),
+
         (r"logical_tile_clb_mode_default__fle_mode_physical__fabric_mode_default__frac_logic_mode_default__carry_follower_1/"
          r"logical_tile_clb_mode_default__fle_mode_physical__fabric_mode_default__frac_logic_mode_default__carry_follower",
          "logical_tile_clb_mode_default__fle_mode_physical__fabric_mode_default__frac_logic_mode_default__carry_follower_0"),
 
-        (r"logical_tile_mult_18_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8/"
-         r"logical_tile_mult_18_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8/",
-         "logical_tile_mult_18_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8_0/"),
+        (r"logical_tile_mult_16_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8/"
+         r"logical_tile_mult_16_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8/",
+         "logical_tile_mult_16_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8_0/"),
 
-        (r"logical_tile_mult_18_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8_0/"
-         r"logical_tile_mult_18_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8/",
-         "logical_tile_mult_18_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8_0/")
+        (r"logical_tile_mult_16_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8_0/"
+         r"logical_tile_mult_16_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8/",
+         "logical_tile_mult_16_mode_mult_8x8__mult_8x8_slice_mode_default__mult_8x8_0/")
     ]
 
     with open(temp_path, 'r') as temp_file, open(final_path, 'w') as final_file:
@@ -211,7 +216,7 @@ def generate_clock_constraint(freq: int) -> str:
 create_clock -name prog_clk -period {str(freq)} [get_ports prog_clk]
 ####################################################################################################\n"""
 
-def process_constraint_line(line: str, tile_mappings: zip) -> str:
+def process_constraint_line(line: str, tile_mappings: list) -> str:
     """Process a single constraint line with replacements."""
     if CREATE_CLOCK_KEYWORD not in line:
         line = line.replace(FPGA_TOP_PREFIX, '')
@@ -250,10 +255,10 @@ def fix_sdc_paths(
                 constraints = f.readlines()
 
             # Create mapping pairs for replacement
-            tile_mappings = zip(
+            tile_mappings = list(zip(
                 submodules[tile_name], 
                 sub_modules_instances[tile_name]
-            )
+            ))
 
             # Process each constraint line
             new_constraints = [

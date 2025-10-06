@@ -28,7 +28,7 @@ ${OPENFPGA_PB_PIN_FIXUP_COMMAND}
 # Build the module graph
 #  - Enabled compression on routing architecture modules
 #  - Enable pin duplication on grid modules
-build_fabric --compress_routing ${OPENFPGA_GROUP_TILE_CONFIG_OPTION} 
+build_fabric --compress_routing ${OPENFPGA_GROUP_TILE_CONFIG_OPTION} --group_config_block
 # --load_fabric_key ${EXTERNAL_FABRIC_KEY_FILE} #--verbose
 
 ${OPENFPGA_ADD_FPGA_CORE_MODULE}
@@ -60,7 +60,7 @@ write_fabric_bitstream --file fabric_bitstream.bit --format plain_text
 #  - Enable top-level testbench which is a full verification including programming circuit and core logic of FPGA
 #  - Enable pre-configured top-level testbench which is a fast verification skipping programming phase
 #  - Simulation ini file is optional and is needed only when you need to interface different HDL simulators using openfpga flow-run scripts
-write_full_testbench --file ./SRC --reference_benchmark_file_path ${REFERENCE_VERILOG_TESTBENCH} --include_signal_init --explicit_port_mapping --bitstream fabric_bitstream.bit --fabric_netlist_file_path ${OPENFPGA_FABRIC_VERILOG_NETLIST} --pin_constraints_file ${OPENFPGA_PIN_CONSTRAINTS_FILE} --bus_group_file ${OPENFPGA_BUS_GROUP_FILE}
+write_full_testbench --file ./SRC --reference_benchmark_file_path ${REFERENCE_VERILOG_TESTBENCH} --include_signal_init --explicit_port_mapping --bitstream fabric_bitstream.bit --fabric_netlist_file_path ${OPENFPGA_FABRIC_VERILOG_NETLIST} --pin_constraints_file ${OPENFPGA_PIN_CONSTRAINTS_FILE} --bus_group_file ${OPENFPGA_BUS_GROUP_FILE} 
 
 
 # Write the SDC to run timing analysis for a mapped FPGA fabric

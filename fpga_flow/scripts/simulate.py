@@ -1,6 +1,49 @@
 import os
+import json
 from scripts.paths import get_fabric_path
 from scripts.fix_tb import update_reset, remove_deposit
+
+def load_device_resources(layout="20x20"):
+    """
+    Load device resources from the resources.json file.
+    """
+    try:
+        resources_path = os.path.join(os.path.dirname(__file__), '../../yonga_archs/k4N8f_adder_BRAM_DSP/resources.json')
+        with open(resources_path, 'r') as f:
+            resources_data = json.load(f)
+        return resources_data.get(layout, {})
+    except Exception as e:
+        print(f"Error loading resources from JSON: {e}")
+        # Fallback to hardcoded values
+        quit()
+
+def parse_required_resources(failure_message):
+    """
+    Parse the required resources from the failure message.
+    Example: "Failed to find device which satisfies resource requirements required: io: 128, clb: 217, mult_16: 3, memory: 16"
+    """
+    required_resources = {}
+    try:
+        # Extract the part after "required:"
+        if "required:" in failure_message:
+            required_part = failure_message.split("required:")[1].split("(available")[0].strip()
+            
+            # Parse each resource type
+            parts = required_part.split(',')
+            for part in parts:
+                part = part.strip()
+                if ':' in part:
+                    resource_type, value = part.split(':', 1)
+                    resource_type = resource_type.strip()
+                    value = value.strip()
+                    try:
+                        required_resources[resource_type] = int(value)
+                    except ValueError:
+                        pass
+    except Exception as e:
+        print(f"Error parsing required resources: {e}")
+    
+    return required_resources
 
 def extract_reslts(vpr_stdout, run_status):
     """
@@ -9,10 +52,12 @@ def extract_reslts(vpr_stdout, run_status):
     usage_flag = False
     count_flag = False
     tmp_flag   = False
-    results_dict = {'Device':0, 'io':0, 'clb':0, 'mult_18':0, 'memory':0, 'Fmax':0, 'Critical path':0, 'L1':0, 'L2':0, 'L4':0}
+    results_dict = {'Device':0, 'io':0, 'clb':0, 'mult_16':0, 'memory':0, 'Fmax':0, 'Critical path':0, 'L1':0, 'L2':0, 'L4':0}
     block_usage={}
     block_counts = {}
     io_count=0
+    design_doesnt_fit = False
+    failure_message = ""
     try:
         for i in range(len(vpr_stdout)):
             if("Resource usage..." in vpr_stdout[i] or tmp_flag):
@@ -30,8 +75,9 @@ def extract_reslts(vpr_stdout, run_status):
                         block_counts[vpr_stdout[i].split()[4]]=vpr_stdout[i].split()[0]
             if( "Device Utilization: " in vpr_stdout[i]):
                 tmp_flag = False
-            if("Failed to find device which satisifies resource requirements required:" in vpr_stdout[i]):
-                print(vpr_stdout[i])
+            if("Failed to find device which satisfies resource requirements required:" in vpr_stdout[i]):
+                design_doesnt_fit = True
+                failure_message = vpr_stdout[i].strip()
             if('Device Utilization:' in vpr_stdout[i] and 'Block Utilization' in vpr_stdout[i+1] and 'Block Utilization' in vpr_stdout[i+2]):
                 results_dict['Device'] = float(vpr_stdout[i].split()[2]) # type: ignore
             if('Segment usage by length: length utilization' in vpr_stdout[i]):
@@ -55,16 +101,40 @@ def extract_reslts(vpr_stdout, run_status):
                             print( vpr_stdout[i+zz] )
                             results_dict[vpr_stdout[i+zz].split()[0] + " Fmax" ] =  vpr_stdout[i+zz].split()[6][1:] + vpr_stdout[i+zz].split()[7][:-1]
         
-        io_count = 0
-        for i in block_counts.keys():
-            if("io" in i):
-                io_count += int(block_counts[i])
-        for i in block_usage.keys():
-            if "io" in i:
-                block_usage[i] = block_usage[i] + "/" + str(io_count)
-            else:
-                block_usage[i] = block_usage[i] + "/" + block_counts[i]
-            results_dict[i] = block_usage[i] 
+        # Always use device resources from JSON
+        device_resources = load_device_resources()
+        
+        if design_doesnt_fit:
+            # Parse required resources from failure message
+            required_resources = parse_required_resources(failure_message)
+            
+            # Format as required/available
+            results_dict['io'] = f"{required_resources.get('io', 0)}/{device_resources['io']}"
+            results_dict['clb'] = f"{required_resources.get('clb', 0)}/{device_resources['clb']}"
+            results_dict['mult_16'] = f"{required_resources.get('mult_16', 0)}/{device_resources['mult_16']}"
+            results_dict['memory'] = f"{required_resources.get('memory', 0)}/{device_resources['memory']}"
+            results_dict['Device'] = 0.95  # Indicate high utilization caused failure
+        else:
+            # For successful runs, still use JSON for available resources but parse usage from logs
+            io_count = 0
+            for i in block_counts.keys():
+                if("io" in i):
+                    io_count += int(block_counts[i])
+            
+            # Format using device resources from JSON for denominators
+            for i in block_usage.keys():
+                if "io" in i:
+                    results_dict[i] = f"{block_usage[i]}/{device_resources['io']}"
+                elif i == "clb":
+                    results_dict[i] = f"{block_usage[i]}/{device_resources['clb']}"
+                elif i == "mult_16":
+                    results_dict[i] = f"{block_usage[i]}/{device_resources['mult_16']}"
+                elif i == "memory":
+                    results_dict[i] = f"{block_usage[i]}/{device_resources['memory']}"
+                else:
+                    # For other resources, use the old logic as fallback
+                    results_dict[i] = block_usage[i] + "/" + block_counts.get(i, "0")
+        
         return results_dict
     except Exception as e:
         print(e)
@@ -96,17 +166,17 @@ def generate_simulation_command(simulator, tb_type, benchmark, tbs, task_dir):
     base_command = ''
     vlog_flags = '-suppress all +define+SIMULATION'
     vcs_flags = '-full64 +define+SIMULATION -hsopt=j -timescale=1ns/1ps'
+    xrun_flags = '-delay_trigger +define+SIMULATION -gateloopwarn  +access+r \'-timescale\' \'1ns/1ps\''
     iverilog_flags = '-DSIMULATION'
-    # xcelium_flags = ''
     fabric_netlists = 'SRC/fabric_netlists.v'
     # Define simulator-specific commands
     if simulator == "vlog":
         if tb_type == 4:  # full tb
-            base_command = f'vlog {vlog_flags} SRC/{benchmark.get_name()}_autocheck_top_tb.v {fabric_netlists} benchmark/*.v ; vsim -do "run -all" -c {benchmark.get_name()}_autocheck_top_tb'
+            base_command = f'vlog {vlog_flags} SRC/{benchmark.get_name()}_autocheck_top_tb.v {fabric_netlists} benchmark/*.v ; vsim -voptargs=+acc=npr -suppress 16154 -do "run -all" -c {benchmark.get_name()}_autocheck_top_tb'
         elif tb_type == 3 and is_custom_tb_available(benchmark, tbs):  # custom preconfigured tb
-            base_command = f'vlog {vlog_flags} ../../../../../benchmarks/{benchmark.get_name()}_tb.v SRC/{benchmark.get_name()}_top_formal_verification.v {fabric_netlists} ; vsim -do "run -all" -c {benchmark.get_name()}_tb'
+            base_command = f'vlog {vlog_flags} ../../../../../benchmarks/{benchmark.get_name()}_tb.v SRC/{benchmark.get_name()}_top_formal_verification.v {fabric_netlists} ; vsim -voptargs=+acc=npr -suppress 16154 -do "run -all" -c {benchmark.get_name()}_tb'
         elif tb_type in [3, 2]:  # preconfigured tb
-            base_command = f'vlog {vlog_flags} SRC/{benchmark.get_name()}_formal_random_top_tb.v SRC/{benchmark.get_name()}_top_formal_verification.v {fabric_netlists} benchmark/*.v ; vsim -do "run -all" -c {benchmark.get_name()}_top_formal_verification_random_tb'
+            base_command = f'vlog {vlog_flags} SRC/{benchmark.get_name()}_formal_random_top_tb.v SRC/{benchmark.get_name()}_top_formal_verification.v {fabric_netlists} benchmark/*.v ; vsim -voptargs=+acc=npr -suppress 16154 -do "run -all" -c {benchmark.get_name()}_top_formal_verification_random_tb'
         else:
             base_command = 'echo "Invalid testbench type"'
     elif simulator == "vcs":
@@ -127,15 +197,15 @@ def generate_simulation_command(simulator, tb_type, benchmark, tbs, task_dir):
             base_command = f'iverilog {iverilog_flags} SRC/{benchmark.get_name()}_formal_random_top_tb.v SRC/{benchmark.get_name()}_top_formal_verification.v {fabric_netlists} benchmark/*.v ; ./a.out'
         else:
             base_command = 'echo "Invalid testbench type"'
-    # elif simulator == "xvlog":
-        # if tb_type == 4:  # full tb
-            # base_command = f'xvlog {xcelium_flags} SRC/{benchmark.get_name()}_autocheck_top_tb.v {fabric_netlists} benchmark/*.v ; ./simv'
-        # elif tb_type == 3 and is_custom_tb_available(benchmark, tbs):  # custom preconfigured tb
-            # base_command = f'iverilog {xcelium_flags} ../../../../../benchmarks/{benchmark.get_name()}_tb.v SRC/{benchmark.get_name()}_top_formal_verification.v {fabric_netlists} ; ./a.out'
-        # elif tb_type in [3, 2]:  # preconfigured tb
-            # base_command = f'iverilog {xcelium_flags} SRC/{benchmark.get_name()}_formal_random_top_tb.v SRC/{benchmark.get_name()}_top_formal_verification.v {fabric_netlists} benchmark/*.v ; ./a.out'
-        # else:
-            # base_command = 'echo "Invalid testbench type"'
+    elif simulator == "xrun":
+        if tb_type == 4:  # full tb
+            base_command = f'xrun {xrun_flags} SRC/{benchmark.get_name()}_autocheck_top_tb.v {fabric_netlists} benchmark/*.v '
+        elif tb_type == 3 and is_custom_tb_available(benchmark, tbs):  # custom preconfigured tb
+            base_command = f'xrun {xrun_flags} ../../../../../benchmarks/{benchmark.get_name()}_tb.v SRC/{benchmark.get_name()}_top_formal_verification.v {fabric_netlists} '
+        elif tb_type in [3, 2]:  # preconfigured tb
+            base_command = f'xrun {xrun_flags} SRC/{benchmark.get_name()}_formal_random_top_tb.v SRC/{benchmark.get_name()}_top_formal_verification.v {fabric_netlists} benchmark/*.v'
+        else:
+            base_command = 'echo "Invalid testbench type"'
     else:
         base_command = 'echo "Simulator not supported"'
 
@@ -150,16 +220,16 @@ def is_custom_tb_available(benchmark, tbs):
 
 
 
-def simulate(tb_type, benchmark, arch_name, simulator, tbs=['na'], run_status=True):
-    task_dir = f"{os.getcwd()}/latest/{arch_name}/{benchmark.get_name()}/MIN_ROUTE_CHAN_WIDTH/"
+def simulate(tb_type, benchmark, arch_name, simulator, run_number, tbs=['na'], run_status=True):
+    task_dir = f"{os.getcwd()}/run{run_number:03d}/{arch_name}/{benchmark.get_name()}/MIN_ROUTE_CHAN_WIDTH/"
     original_dir = os.getcwd()
-    results_dict = {'Device': 0, 'io': 0, 'clb': 0, 'mult_18': 0, 'memory': 0, 'Fmax': 0, 'Critical path': 0, 'L1': 0, 'L2': 0, 'L4': 0}
+    results_dict = {'Device': 0, 'io': 0, 'clb': 0, 'mult_16': 0, 'memory': 0, 'Fmax': 0, 'Critical path': 0, 'L1': 0, 'L2': 0, 'L4': 0}
     
     try:
         # Change directory to the task directory
         os.chdir(task_dir)
         if tb_type > 1 and tb_type != 5:
-            os.system(f'cp -r {get_fabric_path()}/SRC/fabric_netlists.v ./SRC/')
+            os.system(f'mkdir -p ./SRC ; cp -r {get_fabric_path()}/SRC/fabric_netlists.v ./SRC/')
     except Exception as e:
         print(e)
         print("Error: ", task_dir)
@@ -180,10 +250,28 @@ def simulate(tb_type, benchmark, arch_name, simulator, tbs=['na'], run_status=Tr
             # Run the simulation
             stream = os.popen(sim_command)
             output = stream.read()
-            print(output)
+            
+            # Write simulation output to log file
+            simulation_log_path = os.path.join(task_dir, 'simulation.log')
+            try:
+                with open('simulation.log', 'w') as log_file:
+                    log_file.write(f"Simulation Command: {sim_command}\n")
+                    log_file.write("=" * 50 + "\n")
+                    log_file.write("Simulation Output:\n")
+                    log_file.write("=" * 50 + "\n")
+                    log_file.write(output)
+                
+                # Print status with log path
+                if 'Simulation Succeed' in output:
+                    print(f"Simulation PASSED - Log at: {simulation_log_path}")
+                else:
+                    print(f"Simulation FAILED - Log at: {simulation_log_path}")
+                    
+            except Exception as e:
+                print(f"Error writing simulation log: {e}")
+                print(output)  # Fallback to printing if log write fails
     else:
-        print('Run failed')
-        output = 'Run failed'
+        output = 'Bitstream was not generated'
     
     try: 
         with open('vpr_stdout.log', 'r') as f:
@@ -197,9 +285,9 @@ def simulate(tb_type, benchmark, arch_name, simulator, tbs=['na'], run_status=Tr
     results_dict = extract_reslts(vpr_stdout, run_status)
     os.chdir(original_dir)
     
-    if 'Simulation Succeed' not in output and 'NO_TB' != output:
+    if 'Simulation Succeed' not in output and 'NO_TB' != output and run_status:
         print("Simulation Failed")
         print(f"Simulation Output: {output}")
         return False, results_dict
     else:
-        return True, results_dict
+        return run_status, results_dict

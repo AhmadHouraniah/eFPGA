@@ -47,8 +47,14 @@ def generate_flist():
         
         with open(flist_path, 'w') as flist:
             for line in netlist:
-                if "//" not in line and line.strip():
-                    flist.write(line.strip().strip("`include \"").replace("\"\n", "\n"))
+                line = line.strip()
+                if not line or "//" in line:
+                    continue
+                line = line.replace("`include", "").strip()
+                line = line[1:-1]
+                flist.write(line+"\n")
+                # if "//" not in line and line.strip():
+                #     flist.write(line.strip().strip("`include \"").replace("\"\n", "\n"))
     except FileNotFoundError:
         print(f"File not found: {netlist_path}")
 

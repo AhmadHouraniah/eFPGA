@@ -11,7 +11,7 @@ def write_clock_constraints(clocks_names, reset_flag):
         else:
             f.write(f"  <set_io pin=\"clk\" net=\"clk\"/>\n")
         if reset_flag:
-            f.write("  <set_io pin=\"Reset[0]\" net=\"Reset\"/>\n")
+            f.write("  <set_io pin=\"GLOBAL_RESET[0]\" net=\"GLOBAL_RESET\"/>\n")
         f.write("</pin_constraints>\n")
 
     with open("config/constraints/repack_design_constraints.xml", "w") as f:
@@ -30,7 +30,7 @@ import re
 def map_rst_and_clocks(benchmark):
     """
     This function is responsible for mapping a benchmark's clock and reset signals to the global pins.
-    It extracts the names of clock signals and checks if the global reset is used which must be called "Reset"
+    It extracts the names of clock signals and checks if the global reset is used which must be called "GLOBAL_RESET"
     """
     clocks_names=[]
     reset_flag=False
@@ -40,8 +40,8 @@ def map_rst_and_clocks(benchmark):
         if("module" in i and benchmark.get_name() in i): 
             top_module_flag = True
         if(top_module_flag): 
-            # If the global Reset pin is used  
-            if("Reset" in i): 
+            # If the global GLOBAL_RESET pin is used  
+            if("GLOBAL_RESET" in i): 
                 reset_flag=True
             # The loop below extracts the clock names
             if("clk" in i and "input" in i):
