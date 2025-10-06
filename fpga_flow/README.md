@@ -6,7 +6,7 @@ python3 fpga_task.py
 ```
 
 First the script gives the option select the benchmarks you want to run. 
-It will recognize any RTL in the benchmark directory **(../benchmarks)**
+It will recognize any RTL in the benchmark directory **(../../benchmarks)**
 
 Note that the benchmark should share the same name as the top module, otherwise it won't be correctly recognized by this script.
 Additionally, benchmarks that consist of multiple files should be placed in folder that has the name of the top module, the script will automatically add all the files within the folder
@@ -25,19 +25,19 @@ Additionally, benchmarks that consist of multiple files should be placed in fold
 <ins>**5: Generate bitstream**</ins> &rarr; Generates a bitstream
 
 ## Some rules to use the script:
-- To use the global reset pin automatically, the benchmark should use the name "Reset"
+- To use the global reset pin automatically, the benchmark should use the name "GLOBAL_RESET"
 
-- The global pin is active low. There is no global set signal, so benchmarks using a global reset cannot reset a flop to a non-zero value
+- The global pin is active low. There is not global set signal, so benchmarks using a global reset cannot reset a flop to a non-zero value
 
 - To use a logical reset that is only triggered at the start of the simulation, the benchmark should use the name "reset"
 Other names for the reset signal are not recognized and are treated as general inputs (random input stimulus). 
-"Reset" and "reset" can also be replaced with other names by modifying the scripts.
+"GLOBAL_RESET" and "reset" can also be replaced with other names by modifying the scripts.
 
-- Benchmarks should be placed in ```../benchmarks```
-	- To use custom testbenches, the tb should be placed in ```../benchmarks``` and should have a name that matches the top module (<top_module_name>_tb.v)
+- Benchmarks should be placed in ```../../benchmarks```
+	- To use custom testbenches, the tb should be placed in ```../../benchmarks``` and should have a name that matches the top module (<top_module_name>_tb.v)
 	- The custom TB should instantiate the wrapper instead of the RTL's top module (the DUT's name should be <top_module_name>_top_formal_verification)
 
-- Pin constraints should be placed in ```../pin_constraints```
+- Pin constraints should be placed in ```../../pin_constraints```
 	- For both of these the file name has to match the top module
 	- If no matching PCF file is found, one is automatically generated using the order which the pins where specified in.
 	- Not setting the PCF leaves this to VPR, which is mostly random
